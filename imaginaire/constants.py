@@ -155,16 +155,7 @@ def get_cosmos_predict2_video2world_checkpoint(
         if aspect_ratio != "16:9":
             raise NotImplementedError("Cosmos-Predict2 + NATTEN only supports 16:9 aspect ratio at the moment.")
         suffix += "-natten"
-    # return f"{model_dir}/model-{resolution}p-{fps}fps{suffix}.pt"
-    # return f"{model_dir}/iter_000013400_4views.pt" #robocasa atomic
-
-    # return f"{model_dir}/iter_000010200_4views_full_task.pt" #robocasa full-task
-    # return f"{model_dir}/iter_000010600_4views_atomic_libero.pt"
-    # return f"{model_dir}/iter_000000400_singleviews-realworl-atomic.pt" ##atomic task for real-world FRANKA
-    # return f"{model_dir}/iter_000007600_windowx.pt" #checkpoint wm windowx
-    return f"{model_dir}/iter_000018800-atomic-robocasa-generazation-unseen-task.pt" #checkpoint wm atomic-robocasa-unseen-generalization task
-    
-    
+    return f"{model_dir}/model-{resolution}p-{fps}fps{suffix}.pt"
 
 
 CosmosPredict2MultiviewModelSize = Literal["2B"]
@@ -226,6 +217,8 @@ def get_cosmos_predict2_gr00t_checkpoint(
     fps: CosmosPredict2Video2WorldFPS,
     aspect_ratio: CosmosPredict2Gr00tAspectRatio,
 ) -> str:
+    if model_size == "2B":
+        raise ValueError("For 2B GR00T inference, pass --dit_path with a local World2Act or base Video2World checkpoint.")
     return get_cosmos_predict2_video2world_checkpoint(
         model_size=model_size,
         model_type=_GR00T_MODEL_TYPE_MAPPING[gr00t_variant],

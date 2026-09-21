@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 from hydra.core.config_store import ConfigStore
 from megatron.core import parallel_state
 from torch.utils.data import DataLoader, DistributedSampler
@@ -35,12 +37,11 @@ cs = ConfigStore.instance()
 
 # GROOT example
 example_video_dataset_gr1 = L(Dataset)(
-    dataset_dir="datasets/benchmark_train/gr1",
+    dataset_dir=os.environ.get("WORLD2ACT_DATASET_DIR", "datasets/benchmark_train/gr1"),
     num_frames=93,
-    video_size=(432, 768),
+    video_size=(480, 832),
 )
 # 832x480
-print("------------------------------da vo day")
 dataloader_train_gr1 = L(DataLoader)(
     dataset=example_video_dataset_gr1,
     sampler=L(get_sampler)(dataset=example_video_dataset_gr1),
@@ -60,7 +61,7 @@ cs.store(
 # NVTE_FUSED_ATTN=0 torchrun --nproc_per_node=8 --master_port=12341 -m scripts.train --config=cosmos_predict2/configs/base/config.py -- experiment=predict2_video2world_training_2b_groot_gr1_480
 predict2_video2world_training_2b_groot_gr1_480 = dict(
     defaults=[
-        {"override /model": "predict2_video2world_fsdp_2b"},
+        {"override /model": "predict2_video2world_fsdp_2b_480p_16fps"},
         {"override /optimizer": "fusedadamw"},
         {"override /ckpt_type": "standard"},
         {"override /dataloader_val": "mock"},
@@ -70,7 +71,7 @@ predict2_video2world_training_2b_groot_gr1_480 = dict(
     ],
     model=dict(
         config=dict(
-            fsdp_shard_size=8,
+            fsdp_shard_size=1,
             pipe_config=dict(guardrail_config=dict(enabled=False)),
         )
     ),
@@ -84,8 +85,8 @@ predict2_video2world_training_2b_groot_gr1_480 = dict(
         cycle_lengths=[100_000],
     ),
     job=dict(
-        project="posttraining",
-        group="video2world",
+        project="world2act",
+        group="wm_pretraining",
         name="2b_groot_gr1_480",
     ),
     model_parallel=dict(
@@ -131,8 +132,8 @@ predict2_video2world_training_14b_groot_gr1_480 = dict(
         context_parallel_size=4,
     ),
     job=dict(
-        project="posttraining",
-        group="video2world",
+        project="world2act",
+        group="wm_pretraining",
         name="14b_groot_gr1_480",
     ),
     dataloader_train=dataloader_train_gr1,
