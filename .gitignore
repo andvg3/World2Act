@@ -1,0 +1,6 @@
+
+# Private checkpoints — never publish
+/imaginaire/action_pretraining/weights_libero/
+
+# Private checkpoints
+*.pt
