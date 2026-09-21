@@ -24,8 +24,6 @@ from imaginaire.lazy_config import instantiate
 from imaginaire.lazy_config.lazy import LazyConfig
 from imaginaire.utils import distributed
 from imaginaire.utils.config_helper import get_config_module, override
-from imaginaire.action_pretraining.action_dataloader import RoboCasaActionDataset, LIBEROActionDataset, FrankaArmActionDataset, SimplerEnvActionDataset
-from imaginaire.action_pretraining.action_vae import ActionVAE
 
 @logging.catch(reraise=True)
 def launch(config: Config, args: argparse.Namespace) -> None:
@@ -38,33 +36,60 @@ def launch(config: Config, args: argparse.Namespace) -> None:
     config.validate()
     # Freeze the config so developers don't change it during training.
     config.freeze()  # type: ignore
-    trainer = config.trainer.type(config)
+    if args.training_mode == "action_vae":
+        from imaginaire.action_pretraining.trainer import ActionVAETrainer
+
+        trainer = ActionVAETrainer(config)
+    else:
+        trainer = config.trainer.type(config)
     # Create the model
     model = instantiate(config.model)
     # Create the dataloaders.
     dataloader_train = instantiate(config.dataloader_train)
     dataloader_val = instantiate(config.dataloader_val)
-    # Create the action data & model
-    # data_action = RoboCasaActionDataset("/vast/users/tianyu.wang/anv_workspace/ThinkPlan/playground/RoboCasa_Data") #FIXME
-    # data_action = LIBEROActionDataset("/vast/users/tianyu.wang/tuanvvv_workspace/GR00T-Dreams/libero_finetuning/LIBERO/datasets")
-    # data_action = FrankaArmActionDataset("/vast/users/tianyu.wang/tuanvvv_workspace/GR00T-Dreams/real-world-WM/Isaac-GR00T/real-world")
-    data_action = SimplerEnvActionDataset("/vast/users/tianyu.wang/tuanvvv_workspace/GR00T-Dreams/cosmos-predict2/datasets/benchmark_train/brige_v2_windowx/data")
-    action_model = ActionVAE(action_dim=7)
-    trainer.train(
-        model,
-        dataloader_train,
-        dataloader_val,
-        data_action,
-        action_model
-    )
+    if args.training_mode == "action_vae":
+        from imaginaire.action_pretraining.action_dataloader import (
+            FrankaArmActionDataset, LIBEROActionDataset, RoboCasaActionDataset, SimplerEnvActionDataset,
+        )
+        from imaginaire.action_pretraining.action_vae import ActionVAE
+
+        datasets = {
+            "robocasa": (RoboCasaActionDataset, 12),
+            "libero": (LIBEROActionDataset, 7),
+            "franka": (FrankaArmActionDataset, 7),
+            "simpler_env": (SimplerEnvActionDataset, 7),
+        }
+        dataset_class, action_dim = datasets[args.action_dataset]
+        kwargs = {"root_dir": args.action_data_root}
+        if args.action_dataset == "robocasa":
+            kwargs["metadata_path"] = args.action_metadata
+        data_action = dataset_class(**kwargs)
+        trainer.train(
+            model, dataloader_train, dataloader_val, data_action, ActionVAE(action_dim=action_dim),
+            dataset_type=args.action_dataset, output_dir=args.action_output_dir,
+            learning_rate=args.action_learning_rate, init_checkpoint=args.action_init_checkpoint,
+            save_iter=args.action_save_iter,
+        )
+    else:
+        trainer.train(model, dataloader_train, dataloader_val)
+
 
 
 if __name__ == "__main__":
-    # Usage: torchrun --nproc_per_node=1 -m scripts.train --config=cosmos_predict2/configs/base/config.py -- experiments=predict2_video2world_training_2b_cosmos_nemo_assets
+    # Usage: torchrun --nproc_per_node=1 -m scripts.train --config=cosmos_predict2/configs/base/config.py -- experiment=predict2_video2world_training_2b_groot_gr1_480
 
     # Get the config file from the input arguments.
     parser = argparse.ArgumentParser(description="Training")
     parser.add_argument("--config", help="Path to the config file", required=True)
+    parser.add_argument("--training_mode", choices=["wm", "action_vae"], default="wm",
+                        help="wm: fine-tune world model; action_vae: Stage 1 with a frozen world model")
+    parser.add_argument("--action_dataset", choices=["robocasa", "libero", "franka", "simpler_env"])
+    parser.add_argument("--action_data_root", help="Local action dataset; required for Stage 1")
+    parser.add_argument("--action_metadata", help="RoboCasa video_metadata.json; defaults to action_data_root/video_metadata.json")
+    parser.add_argument("--action_output_dir", default="checkpoints/action_vae")
+    parser.add_argument("--action_learning_rate", type=float, default=1e-4)
+    parser.add_argument("--action_save_iter", type=int, default=100)
+    parser.add_argument("--action_init_checkpoint", help="Warm-start Action VAE state dict; optimizer and step counter start fresh")
     parser.add_argument(
         "opts",
         help="""
@@ -81,6 +106,13 @@ For python-based LazyConfig, use "path.key=value".
         help="Do a dry run without training. Useful for debugging the config.",
     )
     args = parser.parse_args()
+    if args.training_mode == "action_vae":
+        if not args.action_dataset or not args.action_data_root:
+            parser.error("--training_mode action_vae requires --action_dataset and --action_data_root")
+        if int(os.environ.get("WORLD_SIZE", "1")) != 1:
+            parser.error("Stage 1 currently supports --nproc_per_node=1")
+        if args.action_save_iter < 1 or args.action_learning_rate <= 0:
+            parser.error("Action VAE learning rate and save interval must be positive")
     config_module = get_config_module(args.config)
     config = importlib.import_module(config_module).make_config()
     config = override(config, args.opts)

@@ -19,6 +19,8 @@ from argparse import ArgumentParser
 
 parser = ArgumentParser()
 parser.add_argument("--training", action="store_true", help="Check training packages")
+parser.add_argument("--stage1", action="store_true", help="Also check Stage 1 action-dataset packages")
+parser.add_argument("--require_rocm", action="store_true", help="Require a ROCm PyTorch build and an accessible GPU")
 args = parser.parse_args()
 
 
@@ -103,7 +105,9 @@ packages = [
     "transformer_engine",
     "megatron.core",
     ("flash_attn", "flash_attn_interface"),
-    "natten",
+    "decord",
+    "wandb",
+    "psutil",
 ]
 packages_training = [
     "apex",
@@ -112,9 +116,26 @@ packages_training = [
 all_success = check_packages(packages)
 if args.training:
     training_success = check_packages(packages_training)
+    all_success = all_success and training_success
     if not training_success:
         print("\033[93m[WARNING]\033[0m Training packages not found. Training features will be unavailable.")
+
+if not all_success:
+    sys.exit(1)
 
 if all_success:
     print("-----------------------------------------------------------")
     print("\033[92m[SUCCESS]\033[0m Cosmos-predict2 environment setup is successful!")
+
+if args.stage1 and not check_packages(["h5py", "pyarrow"]):
+    sys.exit(1)
+if args.require_rocm:
+    import torch
+
+    if not torch.version.hip or not torch.cuda.is_available():
+        print("[ERROR] A ROCm PyTorch build and an accessible AMD GPU are required.")
+        sys.exit(1)
+    from torch.distributed.fsdp import fully_shard  # noqa: F401
+    from transformer_engine.pytorch.attention.rope import apply_rotary_pos_emb  # noqa: F401
+
+    print(f"[SUCCESS] ROCm {torch.version.hip}; device: {torch.cuda.get_device_name(0)}")

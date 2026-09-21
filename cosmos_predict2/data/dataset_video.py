@@ -15,7 +15,6 @@
 
 import os
 import pickle
-import traceback
 import warnings
 from typing import Any
 
@@ -71,7 +70,8 @@ class Dataset(Dataset):
         ]
         log.info(f"{len(self.video_paths)} videos in total")
 
-        self.wrong_number = 0
+        if not self.video_paths:
+            raise ValueError(f"No matched videos/*.mp4 and t5_xxl/*.pickle pairs found in {self.dataset_dir}")
         self.preprocess = T.Compose([ToTensorVideo(), Resize_Preprocess(tuple(video_size))])
 
     def __str__(self) -> str:
@@ -83,7 +83,6 @@ class Dataset(Dataset):
     def _load_video(self, video_path) -> tuple[np.ndarray, float]:
         vr = VideoReader(video_path, ctx=cpu(0), num_threads=2)
         total_frames = len(vr)
-        # print("total_frames--------,",total_frames)
         if total_frames < self.sequence_length:
             # If there are not enough frames, let it fail
             warnings.warn(  # noqa: B028
@@ -93,9 +92,8 @@ class Dataset(Dataset):
             raise ValueError(f"Video {video_path} has insufficient frames.")
 
         # randomly sample a sequence of frames
-        # print("self.sequence_length:----",self.sequence_length)
         max_start_idx = total_frames - self.sequence_length
-        start_frame = np.random.randint(0, max_start_idx)
+        start_frame = np.random.randint(0, max_start_idx + 1)
         end_frame = start_frame + self.sequence_length
         frame_ids = np.arange(start_frame, end_frame).tolist()
 
@@ -166,16 +164,8 @@ class Dataset(Dataset):
             data["padding_mask"] = torch.zeros(1, h, w)
 
             return data
-        except Exception:
-            warnings.warn(  # noqa: B028
-                f"Invalid data encountered: {self.video_paths[index]}. Skipped "
-                f"(by randomly sampling another sample in the same dataset)."
-            )
-            warnings.warn("FULL TRACEBACK:")  # noqa: B028
-            warnings.warn(traceback.format_exc())  # noqa: B028
-            self.wrong_number += 1
-            log.info(self.wrong_number, rank0_only=False)
-            return self[np.random.randint(len(self.samples))]
+        except Exception as exc:
+            raise RuntimeError(f"Could not load training sample: {self.video_paths[index]}") from exc
 
 
 if __name__ == "__main__":

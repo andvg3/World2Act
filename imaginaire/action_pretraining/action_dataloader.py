@@ -10,9 +10,9 @@ import re
 import pandas as pd
 
 class RoboCasaActionDataset(Dataset):
-    def __init__(self, root_dir, metadata_path="/vast/users/tianyu.wang/anv_workspace/ThinkPlan/playground/playground/data/RoboCasa_mg/train/video_metadata.json"):
+    def __init__(self, root_dir, metadata_path=None):
         self.root_path = Path(root_dir)
-        self.metadata_path = metadata_path
+        self.metadata_path = Path(metadata_path) if metadata_path else self.root_path / "video_metadata.json"
         self.episode_index = []
         self.lookup_map = {}
         self.task_to_demos = defaultdict(list)
@@ -481,7 +481,7 @@ class FrankaArmActionDataset(Dataset):
 
 
 class SimplerEnvActionDataset(Dataset):
-    def __init__(self, root_dir="/vast/users/tianyu.wang/tuanvvv_workspace/GR00T-Dreams/cosmos-predict2/datasets/benchmark_train/gr1"):
+    def __init__(self, root_dir):
         self.root_path = Path(root_dir)
         if (self.root_path / "data").is_dir():
             self.root_path = self.root_path / "data"
@@ -642,42 +642,3 @@ class SimplerEnvActionDataset(Dataset):
             negatives.append(torch.zeros((self.window_size, self.action_dim)))
 
         return negatives[:num_negatives]
-
-
-if __name__ == "__main__":
-    # --- Usage ---
-    # Update this path to your actual path
-    # data_path = "/vast/users/tianyu.wang/tuanvvv_workspace/GR00T-Dreams/libero_finetuning/LIBERO/datasets"
-    
-    # print("Initializing LIBERO Dataset...")
-    # dataset = LIBEROActionDataset(root_dir=data_path)
-
-    # # --- Test 1: Check a specific task name parsing ---
-    # # We try to grab a task we know exists based on your description
-    # # Example: 'turn_on_the_stove_and_put_the_moka_pot_on_it_demo'
-    
-    # # test_task = "turn_on_the_stove_and_put_the_moka_pot_on_it_demo"
-    # test_task = "put_the_bowl_on_the_plate"
-    # demo_num = 3
-    # dataset.get_action(test_task, demo_num, 0)
-    # if test_task in dataset.task_to_demos:
-    #     print(f"\nFound task: {test_task}")
-    #     demos = dataset.task_to_demos[test_task]
-    #     print(f"Available demo IDs: {demos[:5]}...")
-        
-    #     # Get Action
-    #     action = dataset.get_action(test_task, demos[0])
-    #     print(f"Retrieved action shape for demo {demos[0]}: {action.shape}") # Should be (T, 7)
-        
-    #     # Test Negatives
-    #     negs = dataset.sample_negative_actions(test_task, demos[0], num_negatives=2)
-    #     print(f"Sampled {len(negs)} negatives.")
-    # else:
-    #     print(f"\nCould not find specific test task '{test_task}'.")
-    #     print("Printing 5 random tasks found instead:")
-    #     print(list(dataset.task_to_demos.keys())[:5])
-
-    data_path = "/vast/users/tianyu.wang/tuanvvv_workspace/GR00T-Dreams/real-world-WM/Isaac-GR00T/real-world"
-    dataset = FrankaArmActionDataset(data_path)
-    action_segment = dataset.get_action("place_the_bowl_on_the_plate", 5)
-    print(action_segment.shape)

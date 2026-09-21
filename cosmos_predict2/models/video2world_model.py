@@ -466,75 +466,6 @@ class Predict2Video2WorldModel(ImaginaireModel):
 
         return output_batch, kendall_loss, pred_mse_B_C_T_H_W, edm_loss_B_C_T_H_W
 
-    def compute_loss_with_epsilon_and_sigma_w_latent(
-        self,
-        x0_B_C_T_H_W: torch.Tensor,
-        condition: TextCondition,
-        epsilon_B_C_T_H_W: torch.Tensor,
-        sigma_B_T: torch.Tensor,
-    ) -> tuple[dict, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Compute loss givee epsilon and sigma
-
-        This method is responsible for computing loss give epsilon and sigma. It involves:
-        1. Adding noise to the input data.
-        2. Passing the noisy data through the network to generate predictions.
-        3. Computing the loss based on the difference between the predictions and the original data, \
-            considering any configured loss weighting.
-
-        Args:
-            data_batch (dict): raw data batch draw from the training data loader.
-            x0: image/video latent
-            condition: text condition
-            epsilon: noise
-            sigma: noise level
-
-        Returns:
-            tuple: A tuple containing four elements:
-                - dict: additional data that used to debug / logging / callbacks
-                - Tensor 1: kendall loss,
-                - Tensor 2: MSE loss,
-                - Tensor 3: EDM loss
-
-        Raises:
-            AssertionError: If the class is conditional, \
-                but no number of classes is specified in the network configuration.
-
-        Notes:
-            - The method handles different types of conditioning
-            - The method also supports Kendall's loss
-        """
-        # Get the mean and stand deviation of the marginal probability distribution.
-        mean_B_C_T_H_W, std_B_T = x0_B_C_T_H_W, sigma_B_T
-        # Generate noisy observations
-        xt_B_C_T_H_W = mean_B_C_T_H_W + epsilon_B_C_T_H_W * rearrange(std_B_T, "b t -> b 1 t 1 1")
-        # make prediction
-        model_pred = self.pipe.denoise(xt_B_C_T_H_W, sigma_B_T, condition)
-        # loss weights for different noise levels
-        weights_per_sigma_B_T = self.get_per_sigma_loss_weights(sigma=sigma_B_T)
-        # extra loss mask for each sample, for example, human faces, hands
-        pred_mse_B_C_T_H_W = (x0_B_C_T_H_W - model_pred.x0) ** 2
-
-        # extract latent representation here
-        latent_x0 = model_pred.x0.clone()
-        edm_loss_B_C_T_H_W = pred_mse_B_C_T_H_W * rearrange(weights_per_sigma_B_T, "b t -> b 1 t 1 1")
-        kendall_loss = edm_loss_B_C_T_H_W
-        output_batch = {
-            "x0": x0_B_C_T_H_W,
-            "xt": xt_B_C_T_H_W,
-            "latent_x0": latent_x0,
-            "sigma": sigma_B_T,
-            "weights_per_sigma": weights_per_sigma_B_T,
-            "condition": condition,
-            "model_pred": model_pred,
-            "mse_loss": pred_mse_B_C_T_H_W.mean(),
-            "edm_loss": edm_loss_B_C_T_H_W.mean(),
-            "edm_loss_per_frame": torch.mean(edm_loss_B_C_T_H_W, dim=[1, 3, 4]),
-        }
-        output_batch["loss"] = kendall_loss.mean()  # check if this is what we want
-
-        return output_batch, kendall_loss, pred_mse_B_C_T_H_W, edm_loss_B_C_T_H_W
-
     def training_step(self, data_batch: dict, data_batch_idx: int) -> tuple[dict, torch.Tensor]:
         self.pipe.device = self.device
 
@@ -550,7 +481,7 @@ class Predict2Video2WorldModel(ImaginaireModel):
         x0_B_C_T_H_W, condition, epsilon_B_C_T_H_W, sigma_B_T = self.pipe.broadcast_split_for_model_parallelsim(
             x0_B_C_T_H_W, condition, epsilon_B_C_T_H_W, sigma_B_T
         )
-        output_batch, kendall_loss, _, _ = self.compute_loss_with_epsilon_and_sigma_w_latent(
+        output_batch, kendall_loss, _, _ = self.compute_loss_with_epsilon_and_sigma(
             x0_B_C_T_H_W, condition, epsilon_B_C_T_H_W, sigma_B_T
         )
 

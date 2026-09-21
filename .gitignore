@@ -1,6 +1,49 @@
-
-# Private checkpoints — never publish
-/imaginaire/action_pretraining/weights_libero/
-
-# Private checkpoints
+# Private model weights and latent tensors (all directories)
 *.pt
+*.pt.*
+*.pth
+*.ckpt
+*.safetensors
+/checkpoints/
+**/weights/
+**/weights_*/
+
+# Private datasets and generated runs
+/datasets
+/data/
+/output/
+/outputs/
+/logs/
+/runs/
+/wandb/
+*.h5
+*.hdf5
+*.parquet
+*.pickle
+*.pkl
+*.npy
+*.npz
+World2Act.tar.gz
+
+# Python, environments, and local machine files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+.ipynb_checkpoints/
+.DS_Store
+__MACOSX/
+*.egg-info/
+/build/
+/dist/
+
+# Local credentials
+.env
+.env.*
+!.env.example
+!.env.template
+.netrc
+.ssh/
+.aws/
